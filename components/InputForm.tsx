@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import { SolarInputs } from '../types';
 import { Tooltip } from './Tooltip';
 import { PANEL_OPTIONS } from '../constants';
@@ -19,14 +20,24 @@ import {
   Calendar,
   Clock,
   BarChart3,
-  Tag,
-  Gauge,
-  Thermometer,
-  CloudFog,
-  ZapOff,
   Percent,
   PackageCheck,
-  Wrench
+  Wrench,
+  Maximize2,
+  Target,
+  AlertTriangle,
+  CheckCircle2,
+  AlertCircle,
+  Thermometer,
+  ZapOff,
+  CloudFog,
+  Gauge,
+  X,
+  Lightbulb,
+  Trees,
+  Building2,
+  ArrowRight,
+  MousePointerClick
 } from 'lucide-react';
 
 interface InputFormProps {
@@ -42,6 +53,7 @@ export const InputForm: React.FC<InputFormProps> = ({ inputs, onChange, onCalcul
   const [isSearchingMarket, setIsSearchingMarket] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [marketError, setMarketError] = useState<string | null>(null);
+  const [showShadeModal, setShowShadeModal] = useState(false);
 
   const handleChange = (field: keyof SolarInputs, value: string | number) => {
     onChange({
@@ -50,13 +62,10 @@ export const InputForm: React.FC<InputFormProps> = ({ inputs, onChange, onCalcul
     });
   };
 
-  // Helper para atualizar o histórico de consumo
   const handleHistoryChange = (index: number, value: string) => {
     const newHistory = [...inputs.consumptionHistory];
     newHistory[index] = value;
     
-    // Calcula nova média
-    // Filtra apenas valores numéricos válidos
     const validValues = newHistory
       .map(v => typeof v === 'string' ? parseFloat(v.replace(',', '.')) : v)
       .filter(v => !isNaN(v as number) && (v as number) > 0) as number[];
@@ -67,16 +76,13 @@ export const InputForm: React.FC<InputFormProps> = ({ inputs, onChange, onCalcul
     onChange({
       ...inputs,
       consumptionHistory: newHistory,
-      monthlyConsumption: parseFloat(average.toFixed(2)) // Atualiza o valor principal
+      monthlyConsumption: parseFloat(average.toFixed(2))
     });
   };
 
-  // Helper para atualizar média diária
   const handleDailyChange = (value: string) => {
     const numValue = parseFloat(value.replace(',', '.'));
     const safeDaily = isNaN(numValue) ? 0 : numValue;
-    
-    // Multiplica por 30.42 (média de dias no mês)
     const projectedMonthly = safeDaily * 30.42;
 
     onChange({
@@ -127,15 +133,10 @@ export const InputForm: React.FC<InputFormProps> = ({ inputs, onChange, onCalcul
     try {
       const selectedPanel = PANEL_OPTIONS.find(p => p.id === inputs.selectedPanelId);
       const powerW = selectedPanel ? selectedPanel.powerW : 550;
-
       const marketData = await fetchMarketPrices(powerW);
 
-      // Lógica de estimativa: Preço do Kit * 1.4 (Margem de instalação/mão de obra)
-      // O prompt agora busca especificamente o preço do kit
       let estimatedCostPerKwp = 0;
       if (marketData.averageKitPricePerKwp > 0) {
-        // Assume que o kit é 65-70% do custo total e a instalação/projeto é 30-35%
-        // Então multiplicamos o kit por ~1.45 para ter o turnkey
         estimatedCostPerKwp = marketData.averageKitPricePerKwp * 1.45; 
       }
 
@@ -158,422 +159,472 @@ export const InputForm: React.FC<InputFormProps> = ({ inputs, onChange, onCalcul
     }
   };
 
-  // Calcula PR para display
+  const getShadeRiskConfig = (analysis: string) => {
+    const lower = analysis.toLowerCase();
+    
+    if (lower.includes('alto') || lower.includes('crítico') || lower.includes('muit') || lower.includes('edifícios')) {
+        return {
+            bg: 'bg-red-50 dark:bg-red-900/20',
+            border: 'border-red-200 dark:border-red-800',
+            text: 'text-red-800 dark:text-red-300',
+            iconColor: 'text-red-500',
+            Icon: AlertTriangle,
+            label: 'Risco Alto Detectado',
+            level: 'HIGH'
+        };
+    }
+    
+    if (lower.includes('médio') || lower.includes('moderado') || lower.includes('parcial') || lower.includes('algum')) {
+        return {
+            bg: 'bg-orange-50 dark:bg-orange-900/20',
+            border: 'border-orange-200 dark:border-orange-800',
+            text: 'text-orange-800 dark:text-orange-300',
+            iconColor: 'text-orange-500',
+            Icon: AlertCircle,
+            label: 'Risco Moderado',
+            level: 'MEDIUM'
+        };
+    }
+    
+    return {
+        bg: 'bg-emerald-50 dark:bg-emerald-900/20',
+        border: 'border-emerald-200 dark:border-emerald-800',
+        text: 'text-emerald-800 dark:text-emerald-300',
+        iconColor: 'text-emerald-500',
+        Icon: CheckCircle2,
+        label: 'Local Adequado',
+        level: 'LOW'
+    };
+  };
+
+  const getShadeAdvice = (analysis: string) => {
+      const lower = analysis.toLowerCase();
+      const advice = {
+          tech: "Inversor String Padrão",
+          action: "Instalação Convencional",
+          detail: "O local parece livre de obstruções significativas."
+      };
+
+      if (lower.includes('árvore') || lower.includes('vegetação')) {
+          advice.action = "Poda ou Reposicionamento";
+          advice.detail = "Vegetação próxima pode crescer e reduzir a geração em até 40% nos horários de pico.";
+      } else if (lower.includes('edifícios') || lower.includes('prédio') || lower.includes('construç')) {
+          advice.action = "Estudo de Layout 3D";
+          advice.detail = "Edificações vizinhas criam sombras 'duras'. Evite instalar módulos próximos a muros altos.";
+      }
+
+      if (lower.includes('parcial') || lower.includes('médio') || lower.includes('alto')) {
+          advice.tech = "Microinversores ou Otimizadores";
+          advice.detail += " O uso de eletrônica de potência a nível de módulo (MLPE) é altamente recomendado para evitar que uma sombra afete todo o sistema.";
+      }
+
+      return advice;
+  };
+
   const currentLosses = Number(inputs.systemLosses) || 0;
   const calculatedPR = (100 - currentLosses) / 100;
+  const isAreaMode = inputs.calculationBasis === 'area';
+  const shadeConfig = inputs.foundLocation ? getShadeRiskConfig(inputs.foundLocation.shadeAnalysis) : null;
+  const shadeAdvice = inputs.foundLocation ? getShadeAdvice(inputs.foundLocation.shadeAnalysis) : null;
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-lg p-6 md:p-8 border border-slate-100 dark:border-slate-800 space-y-8 transition-colors duration-300">
+    <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl rounded-[2.5rem] shadow-2xl p-6 md:p-8 border border-white/40 dark:border-slate-800/60 space-y-8 relative overflow-hidden transition-all duration-300">
       
-      {/* HEADER */}
-      <div>
-        <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
-            <Calculator className="w-5 h-5 text-yellow-500" />
-            Parâmetros do Projeto
-        </h2>
+      {/* Glossy Top Highlight */}
+      <div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-white/80 to-transparent dark:via-slate-500/50"></div>
 
-        {/* BUSCA DE ENDEREÇO */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800/50">
-            <label className="block text-sm font-bold text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
-            <Search className="w-4 h-4" />
-            Busca Inteligente de Irradiação (IA)
-            <Tooltip content="Digite a cidade ou endereço. Nossa IA buscará a média de Horas de Sol Pleno (HSP) exata da região usando Google Maps." />
-            </label>
-            <div className="flex gap-2">
-            <div className="relative flex-grow">
-                <input 
+      {/* SEÇÃO 1: OBJETIVO (CARDS SELECIONÁVEIS) */}
+      <section>
+        <div className="flex items-center gap-2 mb-4 px-1">
+             <Target className="w-5 h-5 text-orange-500" />
+             <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Qual seu objetivo?</h3>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <button
+            onClick={() => handleChange('calculationBasis', 'consumption')}
+            className={`relative group p-4 rounded-3xl border transition-all duration-300 flex flex-col items-center justify-center gap-2 text-center active:scale-95 ${
+              !isAreaMode 
+                ? 'bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 border-orange-200 dark:border-orange-800/50 shadow-lg shadow-orange-500/10' 
+                : 'bg-white/40 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+             <div className={`p-3 rounded-2xl transition-colors ${!isAreaMode ? 'bg-orange-100 text-orange-600 dark:bg-orange-800 dark:text-orange-200' : 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500'}`}>
+                <Zap className="w-6 h-6" />
+             </div>
+             <div>
+                <span className={`block font-bold text-sm ${!isAreaMode ? 'text-orange-900 dark:text-orange-100' : 'text-slate-600 dark:text-slate-400'}`}>Zerar a Conta</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 opacity-80">Cobrir consumo atual</span>
+             </div>
+             {!isAreaMode && <div className="absolute top-3 right-3 w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>}
+          </button>
+
+          <button
+            onClick={() => handleChange('calculationBasis', 'area')}
+            className={`relative group p-4 rounded-3xl border transition-all duration-300 flex flex-col items-center justify-center gap-2 text-center active:scale-95 ${
+              isAreaMode 
+                ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800/50 shadow-lg shadow-blue-500/10' 
+                : 'bg-white/40 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+             <div className={`p-3 rounded-2xl transition-colors ${isAreaMode ? 'bg-blue-100 text-blue-600 dark:bg-blue-800 dark:text-blue-200' : 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500'}`}>
+                <Maximize2 className="w-6 h-6" />
+             </div>
+             <div>
+                <span className={`block font-bold text-sm ${isAreaMode ? 'text-blue-900 dark:text-blue-100' : 'text-slate-600 dark:text-slate-400'}`}>Maximizar Teto</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 opacity-80">Usar toda área disponível</span>
+             </div>
+             {isAreaMode && <div className="absolute top-3 right-3 w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>}
+          </button>
+        </div>
+      </section>
+
+      {/* SEÇÃO 2: LOCALIZAÇÃO (BUSCA INTELIGENTE) */}
+      <section className="relative group">
+         <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-300 to-indigo-300 dark:from-blue-800 dark:to-indigo-800 rounded-3xl opacity-0 group-focus-within:opacity-50 transition duration-500 blur-sm"></div>
+         <div className="relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-1 flex items-center shadow-sm">
+             <div className="pl-4 pr-2 text-slate-400">
+                <Search className="w-5 h-5" />
+             </div>
+             <input 
                 type="text" 
-                placeholder="Ex: Av. Paulista, 1000, São Paulo"
-                className="w-full pl-4 pr-4 py-2 border border-blue-200 dark:border-blue-800 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 outline-none text-sm bg-white dark:bg-slate-800 text-slate-800 dark:text-white placeholder-slate-400"
+                placeholder="Busca por endereço (ex: Av. Paulista, 1000)"
+                className="w-full py-4 bg-transparent outline-none text-slate-800 dark:text-white placeholder-slate-400 text-sm font-medium"
                 value={inputs.addressSearch || ''}
                 onChange={(e) => handleChange('addressSearch', e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
-                />
-            </div>
-            <button 
+             />
+             <button 
                 onClick={handleAddressSearch}
                 disabled={isSearchingAddress}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-                {isSearchingAddress ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Buscar'}
-            </button>
+                className="bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white rounded-xl px-5 py-2.5 font-bold text-xs transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:active:scale-100 mr-1"
+             >
+                {isSearchingAddress ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Buscar HSP'}
+             </button>
+         </div>
+         {searchError && <p className="absolute -bottom-6 left-2 text-[10px] text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded-full">{searchError}</p>}
+      </section>
+
+      {/* RESULTADO DA BUSCA (LOCATION CARD) */}
+      {inputs.foundLocation && shadeConfig && (
+        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 animate-in slide-in-from-top-4 duration-300">
+            <div className="flex justify-between items-start">
+               <div className="flex gap-3">
+                   <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center shadow-sm text-amber-500 shrink-0">
+                       <Sun className="w-5 h-5" />
+                   </div>
+                   <div>
+                       <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase">Irradiação Encontrada</p>
+                       <p className="text-lg font-bold text-slate-800 dark:text-white">{Number(inputs.hsp).toFixed(2)} <span className="text-xs font-normal text-slate-500">kWh/m²</span></p>
+                       <p className="text-[10px] text-slate-400 mt-1 max-w-[200px] truncate">{inputs.foundLocation.address}</p>
+                   </div>
+               </div>
+               
+               <div className={`px-3 py-1.5 rounded-lg border flex items-center gap-2 ${shadeConfig.bg} ${shadeConfig.border}`}>
+                   <shadeConfig.Icon className={`w-4 h-4 ${shadeConfig.iconColor}`} />
+                   <div className="text-right">
+                       <span className={`block text-[10px] font-bold ${shadeConfig.text}`}>{shadeConfig.label}</span>
+                       {shadeConfig.level !== 'LOW' && (
+                         <button onClick={() => setShowShadeModal(true)} className="text-[9px] underline opacity-80 hover:opacity-100">Ver detalhes</button>
+                       )}
+                   </div>
+               </div>
             </div>
-            
-            {searchError && <p className="text-red-500 text-xs mt-2">{searchError}</p>}
-
-            {inputs.foundLocation && (
-            <div className="mt-3 text-xs bg-white dark:bg-slate-800 p-3 rounded border border-blue-100 dark:border-slate-700 animate-fade-in">
-                <div className="flex items-start gap-2 mb-2">
-                <MapPin className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
-                <div>
-                    <p className="font-semibold text-slate-700 dark:text-slate-200">{inputs.foundLocation.address}</p>
-                    <p className="text-slate-500 dark:text-slate-400">HSP encontrado: <span className="font-bold text-green-600 dark:text-green-400">{Number(inputs.hsp).toFixed(2)}</span></p>
-                </div>
-                </div>
-                
-                <div className="pl-6 border-l-2 border-slate-100 dark:border-slate-600 ml-2 space-y-1">
-                <p className="text-slate-500 dark:text-slate-400">
-                    <span className="font-medium text-slate-700 dark:text-slate-300">Análise de Sombra:</span> {inputs.foundLocation.shadeAnalysis}
-                </p>
-                {inputs.foundLocation.mapUri && (
-                    <a 
-                    href={inputs.foundLocation.mapUri} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 mt-1 font-medium"
-                    >
-                    Ver local no Google Maps <ExternalLink className="w-3 h-3" />
-                    </a>
-                )}
-                </div>
-            </div>
-            )}
         </div>
-      </div>
+      )}
 
-      {/* ÁREA DE CONSUMO COM ABAS */}
-      <div className="col-span-1 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-        <div className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex text-xs font-medium text-slate-600 dark:text-slate-400">
-          <button 
-            onClick={() => handleChange('consumptionMode', 'average')}
-            className={`flex-1 py-3 px-2 flex items-center justify-center gap-1 transition-colors ${inputs.consumptionMode === 'average' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
-          >
-            <Zap className="w-3 h-3" />
-            Média Simples
-          </button>
-          <button 
-            onClick={() => handleChange('consumptionMode', 'history')}
-            className={`flex-1 py-3 px-2 flex items-center justify-center gap-1 transition-colors ${inputs.consumptionMode === 'history' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
-          >
-            <Calendar className="w-3 h-3" />
-            Mensal Detalhado
-          </button>
-          <button 
-            onClick={() => handleChange('consumptionMode', 'daily')}
-            className={`flex-1 py-3 px-2 flex items-center justify-center gap-1 transition-colors ${inputs.consumptionMode === 'daily' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400' : 'hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
-          >
-            <Clock className="w-3 h-3" />
-            Média Diária
-          </button>
-        </div>
+      {/* SEÇÃO 3: CONSUMO (INTERACTIVE SLIDER TABS) */}
+      <section className={`transition-all duration-500 ${isAreaMode ? 'opacity-50 grayscale' : 'opacity-100'}`}>
+         <div className="bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-2xl flex relative mb-6">
+             {/* Slider Background */}
+             <div 
+               className="absolute top-1.5 bottom-1.5 rounded-xl bg-white dark:bg-slate-600 shadow-sm transition-all duration-300 ease-out z-0"
+               style={{ 
+                 left: inputs.consumptionMode === 'average' ? '0.375rem' : inputs.consumptionMode === 'history' ? '33.33%' : '66.66%',
+                 width: 'calc(33.33% - 0.5rem)'
+               }}
+             ></div>
 
-        <div className="p-4 bg-white dark:bg-slate-800/50">
-          {/* MODO 1: MÉDIA SIMPLES */}
-          {inputs.consumptionMode === 'average' && (
-            <div className="animate-fade-in">
-               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Consumo Mensal Médio (kWh)
-                <Tooltip content="A média de energia gasta em sua conta de luz nos últimos 12 meses." />
-              </label>
-              <div className="relative">
-                <Zap className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  type="number"
-                  min="0"
-                  onWheel={handleWheel}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all outline-none"
-                  placeholder="Ex: 450"
-                  value={inputs.monthlyConsumption || ''}
-                  onChange={(e) => handleChange('monthlyConsumption', e.target.value)}
-                />
+             {[
+               {id: 'average', icon: Zap, label: 'Média'}, 
+               {id: 'history', icon: Calendar, label: 'Histórico'}, 
+               {id: 'daily', icon: Clock, label: 'Diário'}
+             ].map((mode) => (
+               <button
+                 key={mode.id}
+                 onClick={() => handleChange('consumptionMode', mode.id as any)}
+                 className={`flex-1 relative z-10 py-2.5 text-xs font-bold rounded-xl flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-colors duration-300 ${
+                   inputs.consumptionMode === mode.id 
+                   ? 'text-slate-800 dark:text-white' 
+                   : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                 }`}
+               >
+                 <mode.icon className={`w-4 h-4 ${inputs.consumptionMode === mode.id ? 'text-orange-500' : ''}`} /> 
+                 {mode.label}
+               </button>
+             ))}
+         </div>
+
+         {/* Conteúdo Dinâmico das Abas */}
+         <div className="min-h-[100px]">
+            {inputs.consumptionMode === 'average' && (
+              <div className="animate-in fade-in slide-in-from-left-4 duration-300">
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 block uppercase">Consumo Mensal (kWh)</label>
+                  <div className="relative group focus-within:ring-4 focus-within:ring-orange-100 dark:focus-within:ring-orange-900/20 rounded-2xl transition-all">
+                      <input
+                        type="number"
+                        min="0"
+                        onWheel={handleWheel}
+                        className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-5 text-3xl font-bold text-slate-800 dark:text-white outline-none placeholder-slate-300"
+                        placeholder="0"
+                        value={inputs.monthlyConsumption || ''}
+                        onChange={(e) => handleChange('monthlyConsumption', e.target.value)}
+                      />
+                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">kWh</span>
+                  </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* MODO 2: HISTÓRICO 12 MESES (MENSAL DETALHADO) */}
-          {inputs.consumptionMode === 'history' && (
-             <div className="animate-fade-in">
-                <div className="flex items-center justify-between mb-2">
-                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                     Consumo Mensal Detalhado (kWh)
-                     <Tooltip content="Preencha os meses disponíveis da sua conta. O sistema calculará a média automaticamente." />
-                   </label>
-                   <span className="text-xs bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-bold">
-                     Média: {Number(inputs.monthlyConsumption).toFixed(0)} kWh
-                   </span>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {MONTHS.map((month, idx) => (
-                    <div key={idx} className="relative">
-                       <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 uppercase">{month}</span>
-                       <input
+            {inputs.consumptionMode === 'history' && (
+              <div className="animate-in fade-in zoom-in-95 duration-300">
+                  <div className="flex justify-between items-center mb-3">
+                     <span className="text-xs font-bold text-slate-500 uppercase">12 Meses</span>
+                     <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-bold">Média: {Number(inputs.monthlyConsumption).toFixed(0)}</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {MONTHS.map((month, idx) => (
+                      <div key={idx} className="relative group">
+                          <input
+                            type="number"
+                            onWheel={handleWheel}
+                            className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-2 py-3 text-sm font-bold text-center outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition-all placeholder-transparent"
+                            placeholder="0"
+                            value={inputs.consumptionHistory[idx] || ''}
+                            onChange={(e) => handleHistoryChange(idx, e.target.value)}
+                          />
+                          <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-800 px-1 text-[9px] font-bold text-slate-400 group-hover:text-orange-500 transition-colors uppercase">{month}</span>
+                      </div>
+                    ))}
+                  </div>
+              </div>
+            )}
+
+            {inputs.consumptionMode === 'daily' && (
+              <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+                   <label className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 block uppercase">Consumo Diário (kWh/dia)</label>
+                   <div className="flex items-center gap-4">
+                      <div className="flex-1 relative group focus-within:ring-4 focus-within:ring-blue-100 dark:focus-within:ring-blue-900/20 rounded-2xl transition-all">
+                        <input
                           type="number"
+                          step="0.1"
                           min="0"
                           onWheel={handleWheel}
-                          className="w-full pl-8 pr-2 py-1.5 text-sm border border-slate-200 dark:border-slate-600 rounded focus:ring-1 focus:ring-blue-400 bg-white dark:bg-slate-700 text-slate-900 dark:text-white outline-none"
+                          className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-5 text-3xl font-bold text-slate-800 dark:text-white outline-none placeholder-slate-300"
                           placeholder="0"
-                          value={inputs.consumptionHistory[idx] || ''}
-                          onChange={(e) => handleHistoryChange(idx, e.target.value)}
-                       />
-                    </div>
-                  ))}
-                </div>
-             </div>
-          )}
-
-          {/* MODO 3: MÉDIA DIÁRIA */}
-          {inputs.consumptionMode === 'daily' && (
-            <div className="animate-fade-in">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                Consumo Diário (kWh/dia)
-                <Tooltip content="Faça a leitura do seu medidor em dias consecutivos para saber quanto consome por dia." />
-              </label>
-              <div className="flex items-center gap-4">
-                <div className="relative flex-1">
-                  <BarChart3 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    onWheel={handleWheel}
-                    className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all outline-none"
-                    placeholder="Ex: 15.5"
-                    value={inputs.dailyConsumption || ''}
-                    onChange={(e) => handleDailyChange(e.target.value)}
-                  />
-                </div>
-                <div className="text-right">
-                   <p className="text-xs text-slate-500 dark:text-slate-400">Estimativa Mensal</p>
-                   <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{Number(inputs.monthlyConsumption).toFixed(0)} kWh</p>
-                </div>
+                          value={inputs.dailyConsumption || ''}
+                          onChange={(e) => handleDailyChange(e.target.value)}
+                        />
+                      </div>
+                      <div className="w-px h-12 bg-slate-200 dark:bg-slate-700"></div>
+                      <div className="text-right min-w-[100px]">
+                         <span className="block text-xs text-slate-400 font-bold uppercase">Mensal Est.</span>
+                         <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">{Number(inputs.monthlyConsumption).toFixed(0)}</span>
+                      </div>
+                   </div>
               </div>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
-                *Calculado com base em um mês médio de 30.42 dias.
-              </p>
-            </div>
-          )}
-        </div>
+            )}
+         </div>
+      </section>
+
+      {/* SEÇÃO 4: DETALHES TÉCNICOS (GRID) */}
+      <section className="grid grid-cols-2 gap-4">
+          <div className="col-span-1 bg-white/50 dark:bg-slate-800/30 rounded-2xl p-3 border border-slate-100 dark:border-slate-700/50 focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-50 transition-all">
+              <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase mb-1">
+                  <DollarSign className="w-3 h-3" /> Tarifa (R$/kWh)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                className="w-full bg-transparent text-lg font-bold text-slate-800 dark:text-white outline-none p-0"
+                placeholder="0.92"
+                onWheel={handleWheel}
+                value={inputs.energyTariff || ''}
+                onChange={(e) => handleChange('energyTariff', e.target.value)}
+              />
+          </div>
+
+          <div className={`col-span-1 bg-white/50 dark:bg-slate-800/30 rounded-2xl p-3 border border-slate-100 dark:border-slate-700/50 focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-50 transition-all ${isAreaMode ? 'ring-2 ring-blue-100 border-blue-300' : ''}`}>
+              <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase mb-1 justify-between w-full">
+                  <span className="flex items-center gap-1"><Map className="w-3 h-3" /> Área (m²)</span>
+                  {isAreaMode && <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>}
+              </label>
+              <input
+                type="number"
+                className="w-full bg-transparent text-lg font-bold text-slate-800 dark:text-white outline-none p-0"
+                placeholder="40"
+                onWheel={handleWheel}
+                value={inputs.availableArea || ''}
+                onChange={(e) => handleChange('availableArea', e.target.value)}
+              />
+          </div>
+
+          <div className="col-span-1 bg-white/50 dark:bg-slate-800/30 rounded-2xl p-3 border border-slate-100 dark:border-slate-700/50">
+              <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase mb-1">
+                  <LayoutGrid className="w-3 h-3" /> Módulo
+              </label>
+              <select
+                className="w-full bg-transparent text-sm font-bold text-slate-800 dark:text-white outline-none p-0 cursor-pointer appearance-none truncate pr-4"
+                value={inputs.selectedPanelId}
+                onChange={(e) => handleChange('selectedPanelId', e.target.value)}
+              >
+                 {PANEL_OPTIONS.map((panel) => (
+                    <option key={panel.id} value={panel.id}>{panel.powerW}W</option>
+                 ))}
+              </select>
+          </div>
+
+          <div className="col-span-1 bg-white/50 dark:bg-slate-800/30 rounded-2xl p-3 border border-slate-100 dark:border-slate-700/50">
+               <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase mb-1">
+                  <Percent className="w-3 h-3" /> Perdas
+              </label>
+              <input
+                type="number"
+                className="w-full bg-transparent text-lg font-bold text-slate-800 dark:text-white outline-none p-0"
+                placeholder="25"
+                onWheel={handleWheel}
+                value={inputs.systemLosses}
+                onChange={(e) => handleChange('systemLosses', e.target.value)}
+              />
+          </div>
+      </section>
+
+      {/* EFICIÊNCIA BAR */}
+      <div className="flex items-center gap-3 px-1">
+         <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+             <div className="h-full bg-gradient-to-r from-orange-400 to-emerald-400 transition-all duration-1000" style={{ width: `${calculatedPR * 100}%` }}></div>
+         </div>
+         <span className="text-[10px] font-bold text-slate-400 uppercase">PR {(calculatedPR * 100).toFixed(0)}%</span>
       </div>
 
-      {/* OUTROS INPUTS - GRID LAYOUT */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        {/* Tarifa */}
-        <div className="col-span-1">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Tarifa de Energia (R$/kWh)
-            <Tooltip content="O valor que você paga por cada kWh. Consulte sua conta de luz (ex: 0.95)." />
-          </label>
-          <div className="relative">
-            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              onWheel={handleWheel}
-              className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all outline-none"
-              placeholder="Ex: 0.92"
-              value={inputs.energyTariff || ''}
-              onChange={(e) => handleChange('energyTariff', e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* Área Disponível */}
-        <div className="col-span-1">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Área Disponível (m²)
-            <Tooltip content="Espaço livre no telhado ou solo para instalação dos módulos. Importante para verificar se o sistema cabe." />
-          </label>
-          <div className="relative">
-            <Map className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="number"
-              min="0"
-              onWheel={handleWheel}
-              className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all outline-none"
-              placeholder="Ex: 40"
-              value={inputs.availableArea || ''}
-              onChange={(e) => handleChange('availableArea', e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* HSP */}
-        <div className="col-span-1">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            HSP (Horas de Sol Pleno)
-            <Tooltip content="HSP (Horas de Sol Pleno) mede a radiação solar disponível (1000W/m²). É vital para o cálculo: quanto maior o HSP da sua região, mais energia seu sistema gera e menos painéis você precisa." />
-          </label>
-          <div className="relative">
-            <Sun className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              onWheel={handleWheel}
-              className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all outline-none ${inputs.foundLocation ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-800 dark:text-green-300 font-semibold' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white'}`}
-              placeholder="Ex: 4.5"
-              value={inputs.hsp || ''}
-              onChange={(e) => handleChange('hsp', e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* Seleção de Painel */}
-        <div className="col-span-1">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Modelo de Painel Solar
-            <Tooltip content="Escolha a potência e tecnologia do módulo para recalcular área e quantidade." />
-          </label>
-          <div className="relative">
-            <LayoutGrid className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <select
-              className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all outline-none appearance-none"
-              value={inputs.selectedPanelId}
-              onChange={(e) => handleChange('selectedPanelId', e.target.value)}
+      {/* MERCADO E PREÇOS */}
+      <div className="pt-2">
+         <div className="flex justify-between items-center mb-2">
+            <span className="text-xs font-bold text-slate-500 flex items-center gap-1"><ShoppingBag className="w-3 h-3" /> Referência de Mercado</span>
+            <button 
+                onClick={handleMarketSearch} 
+                disabled={isSearchingMarket}
+                className="text-[10px] text-blue-600 hover:text-blue-700 font-bold disabled:opacity-50"
             >
-              {PANEL_OPTIONS.map((panel) => (
-                <option key={panel.id} value={panel.id}>
-                  {panel.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Perdas do Sistema (Novo) */}
-        <div className="col-span-1">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            Perdas do Sistema (%)
-            <Tooltip content="Fator de redução de eficiência (Performance Ratio). Inclui perdas térmicas, sujeira nos painéis e conversão do inversor. Padrão de mercado: 20% a 25%." />
-          </label>
-          <div className="relative">
-            <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="number"
-              min="0"
-              max="90"
-              step="1"
-              onWheel={handleWheel}
-              className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 bg-white dark:bg-slate-700 text-slate-900 dark:text-white transition-all outline-none"
-              placeholder="Ex: 25"
-              value={inputs.systemLosses}
-              onChange={(e) => handleChange('systemLosses', e.target.value)}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* EFICIÊNCIA DO SISTEMA (INFO) */}
-      <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
-         <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2 mb-2">
-            <Gauge className="w-4 h-4 text-orange-500" />
-            Eficiência Global Resultante
-         </h3>
-         <div className="flex items-center justify-between text-sm">
-            <div className="flex gap-4">
-                <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400" title="Perda de eficiência com o calor">
-                   <Thermometer className="w-3 h-3 text-red-400" /> 
-                   <span>Temperatura</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400" title="Perdas no Inversor e Cabos">
-                   <ZapOff className="w-3 h-3 text-yellow-500" /> 
-                   <span>Elétrica</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400" title="Poeira e Sujeira nos painéis">
-                   <CloudFog className="w-3 h-3 text-slate-400" /> 
-                   <span>Sujeira</span>
-                </div>
-            </div>
-            <div className="text-right">
-                <span className="block text-xs text-slate-400 dark:text-slate-500 uppercase font-bold">Performance Ratio (PR)</span>
-                <span className="font-bold text-slate-800 dark:text-white text-lg">
-                  {calculatedPR.toFixed(2)} <span className="text-xs text-slate-500 dark:text-slate-400 font-normal">({(calculatedPR * 100).toFixed(0)}%)</span>
-                </span>
-            </div>
+                {isSearchingMarket ? 'Atualizando...' : 'Atualizar Preços'}
+            </button>
+         </div>
+         {marketError && <p className="text-[10px] text-red-500 mb-1">{marketError}</p>}
+         <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-3 border border-purple-100 dark:border-purple-800/30 flex justify-between items-center">
+             <div>
+                 <span className="block text-[10px] text-purple-600 dark:text-purple-300 font-bold uppercase">Preço Kit</span>
+                 <span className="text-sm font-bold text-slate-800 dark:text-white">{inputs.marketData?.foundPrice ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inputs.marketData.averageKitPricePerKwp) : '-'} <span className="text-[10px] font-normal text-slate-400">/kWp</span></span>
+             </div>
+             <div className="h-6 w-px bg-purple-200 dark:bg-purple-800/50"></div>
+             <div className="text-right">
+                 <span className="block text-[10px] text-emerald-600 dark:text-emerald-300 font-bold uppercase">Turnkey</span>
+                 <span className="text-sm font-bold text-slate-800 dark:text-white">{inputs.customInstallationCost ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inputs.customInstallationCost) : '-'} <span className="text-[10px] font-normal text-slate-400">/kWp</span></span>
+             </div>
          </div>
       </div>
 
-      {/* ANÁLISE DE MERCADO (Preços) */}
-      <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
-        <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                <ShoppingBag className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                Custos de Fabricante (Intelbras / WEG)
-            </h3>
-            <button
-                onClick={handleMarketSearch}
-                disabled={isSearchingMarket}
-                className="text-xs bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-3 py-1.5 rounded-full hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors font-medium flex items-center gap-1 disabled:opacity-70"
-            >
-                {isSearchingMarket ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Buscar Preços'}
-            </button>
-        </div>
-
-        {marketError && <p className="text-red-500 text-xs mb-3">{marketError}</p>}
-
-        {inputs.marketData && inputs.marketData.foundPrice ? (
-            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 border border-purple-100 dark:border-purple-800/50 animate-fade-in">
-                <div className="flex items-start gap-3">
-                    <TrendingDown className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-1" />
-                    <div>
-                        <p className="text-sm text-slate-700 dark:text-slate-200 font-medium">Preços de Referência:</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 italic">"{inputs.marketData.analysis}"</p>
-                        
-                        <div className="mt-3 grid grid-cols-2 gap-4">
-                            <div className="bg-white dark:bg-slate-800 p-2 rounded border border-purple-200 dark:border-purple-900">
-                                <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center gap-1">
-                                    <PackageCheck className="w-3 h-3" /> Kit (Hardware)
-                                </span>
-                                <p className="text-sm font-bold text-slate-800 dark:text-white">
-                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inputs.marketData.averageKitPricePerKwp)} <span className="text-[10px] font-normal">/kWp</span>
-                                </p>
-                            </div>
-                            <div className="bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-200 dark:border-green-900">
-                                <span className="text-[10px] text-green-700 dark:text-green-400 uppercase font-bold flex items-center gap-1">
-                                   <Wrench className="w-3 h-3" /> Turnkey (Instalado)
-                                </span>
-                                <p className="text-sm font-bold text-green-800 dark:text-green-300">
-                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(inputs.customInstallationCost || 0)} <span className="text-[10px] font-normal">/kWp</span>
-                                </p>
-                                <p className="text-[9px] text-green-600 dark:text-green-500 leading-tight mt-0.5 opacity-80">+45% (Instalação e Projeto)</p>
-                            </div>
-                        </div>
-
-                        {inputs.marketData.sources.length > 0 && (
-                            <div className="mt-3">
-                                <p className="text-[10px] text-slate-400 mb-1">Fontes:</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {inputs.marketData.sources.map((source, idx) => (
-                                        <a 
-                                            key={idx}
-                                            href={source.uri}
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded text-blue-600 dark:text-blue-400 hover:underline truncate max-w-[150px]"
-                                            title={source.title}
-                                        >
-                                            {source.title || 'Link Externo'}
-                                        </a>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        <p className="text-[10px] text-purple-600 dark:text-purple-400 mt-2 font-medium">
-                            *Valores baseados em pesquisa online de Kits Geradores Intelbras e similares.
-                        </p>
-                    </div>
-                </div>
+      {/* CTA PRINCIPAL (CALCULATE) */}
+      <div className="pt-2">
+         <button
+            onClick={onCalculate}
+            className="w-full relative group overflow-hidden rounded-2xl shadow-xl shadow-orange-500/30 hover:shadow-orange-500/50 transition-all duration-300 transform hover:-translate-y-1 active:scale-95 active:shadow-none"
+         >
+            <div className="absolute inset-0 bg-gradient-to-r from-orange-500 to-amber-500 group-hover:from-orange-400 group-hover:to-amber-400 transition-colors"></div>
+            <div className="absolute top-0 -left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12 group-hover:animate-shine"></div>
+            
+            <div className="relative py-4 px-6 flex items-center justify-center gap-3">
+                <Calculator className="w-6 h-6 text-white" />
+                <span className="text-white font-bold text-lg tracking-wide uppercase">
+                {isAreaMode ? "Calcular Potência" : "Simular Economia"}
+                </span>
             </div>
-        ) : (
-            <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 border border-slate-100 dark:border-slate-700 text-center">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Clique em "Buscar Preços" para pesquisar valores de Kits Solares Intelbras, WEG e Canadian Solar em tempo real.
-                </p>
-            </div>
-        )}
+         </button>
       </div>
 
-      <div className="mt-8">
-        <button
-          onClick={onCalculate}
-          className="w-full bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 transform hover:-translate-y-0.5"
-        >
-          <Calculator className="w-5 h-5 text-yellow-400" />
-          Calcular Sistema Ideal
-        </button>
-      </div>
+      {/* MODAL DETALHES DE SOMBREAMENTO (Mantido para consistência) */}
+      {showShadeModal && shadeConfig && shadeAdvice && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+              <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setShowShadeModal(false)}></div>
+              
+              <div className="relative bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-300">
+                  <div className={`p-6 ${shadeConfig.bg} border-b ${shadeConfig.border} flex justify-between items-start`}>
+                      <div className="flex items-center gap-3">
+                          <div className={`p-2 bg-white dark:bg-slate-900 rounded-xl shadow-sm ${shadeConfig.text}`}>
+                             <shadeConfig.Icon className="w-6 h-6" />
+                          </div>
+                          <div>
+                              <h3 className={`text-lg font-bold ${shadeConfig.text}`}>Análise Detalhada</h3>
+                              <p className="text-xs text-slate-600 dark:text-slate-300 opacity-90">Impacto do Sombreamento</p>
+                          </div>
+                      </div>
+                      <button onClick={() => setShowShadeModal(false)} className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white transition-colors">
+                          <X className="w-6 h-6" />
+                      </button>
+                  </div>
+
+                  <div className="p-6 space-y-6">
+                      <div className="space-y-3">
+                          <div className="flex items-start gap-3">
+                             <Search className="w-5 h-5 text-slate-400 mt-1" />
+                             <div>
+                                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">O que detectamos</p>
+                                 <p className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">
+                                     {inputs.foundLocation?.shadeAnalysis}
+                                 </p>
+                             </div>
+                          </div>
+                          <div className="h-px bg-slate-100 dark:bg-slate-800 w-full my-2"></div>
+                          <div className="flex items-start gap-3">
+                             <Trees className="w-5 h-5 text-emerald-500 mt-1" />
+                             <div>
+                                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Diagnóstico Técnico</p>
+                                 <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">
+                                     {shadeAdvice.detail}
+                                 </p>
+                             </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                             <Wrench className="w-5 h-5 text-blue-500 mt-1" />
+                             <div>
+                                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Ação Recomendada</p>
+                                 <p className="text-slate-700 dark:text-slate-300 text-sm font-semibold">
+                                     {shadeAdvice.action}
+                                 </p>
+                             </div>
+                          </div>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                          <div className="flex items-center gap-2 mb-2 text-amber-500">
+                              <Lightbulb className="w-5 h-5" />
+                              <span className="font-bold text-sm">Tecnologia Sugerida</span>
+                          </div>
+                          <p className="text-slate-600 dark:text-slate-300 text-sm">
+                              Para este cenário, recomenda-se fortemente o uso de <strong>{shadeAdvice.tech}</strong> para mitigar perdas de geração.
+                          </p>
+                      </div>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 text-center">
+                      <button 
+                        onClick={() => setShowShadeModal(false)}
+                        className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors"
+                      >
+                          Entendi
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
     </div>
   );
 };

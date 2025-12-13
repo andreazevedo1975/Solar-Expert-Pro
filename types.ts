@@ -1,3 +1,4 @@
+
 export interface SolarInputs {
   monthlyConsumption: number | string; // kWh (Este é o valor final usado no cálculo)
   
@@ -5,6 +6,9 @@ export interface SolarInputs {
   consumptionMode: 'average' | 'history' | 'daily';
   consumptionHistory: (number | string)[]; // Array de 12 meses
   dailyConsumption: number | string; // kWh por dia
+  
+  // Novo campo para definir a base de cálculo
+  calculationBasis: 'consumption' | 'area'; // 'consumption' = alvo é zerar a conta | 'area' = alvo é encher o telhado
 
   energyTariff: number | string; // R$/kWh
   availableArea: number | string; // m²
@@ -40,6 +44,14 @@ export interface PanelRecommendation {
   image?: string;
 }
 
+export interface FinancialYearlyData {
+  year: number;
+  accumulatedSavings: number; // Economia acumulada até este ano
+  yearlySavings: number; // Economia gerada apenas neste ano
+  generation: number; // Geração anual neste ano (considerando degradação)
+  tariff: number; // Tarifa neste ano (considerando inflação)
+}
+
 export interface SolarResults {
   systemSizeKWp: number; // Potência total do sistema
   panelCount: number; // Quantidade de placas
@@ -50,13 +62,14 @@ export interface SolarResults {
   dailyConsumption: number; // Consumo médio kWh/dia
   coveragePercentage: number; // % da conta coberta
   isPartialSystem: boolean; // Se a área limita o sistema
-  monthlySavings: number; // R$
-  annualSavings: number; // R$
+  monthlySavings: number; // R$ (Valor do primeiro mês/ano base)
+  annualSavings: number; // R$ (Valor do primeiro ano base)
   totalInvestment: number; // R$ Estimado
-  paybackMonths: number; // Tempo de retorno em meses
+  paybackMonths: number; // Tempo de retorno em meses (Calculado com fluxo de caixa)
   costSource: 'DEFAULT' | 'MARKET'; // Indica a origem do preço usado
   systemLossesPercentage: number; // Percentual de perda considerado (ex: 25%)
   performanceRatio: number; // PR usado (ex: 0.75)
+  financialProjection: FinancialYearlyData[]; // Array com os dados de 25 anos
 }
 
 export enum SimulationStatus {

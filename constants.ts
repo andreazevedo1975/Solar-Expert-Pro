@@ -1,3 +1,4 @@
+
 // Definição dos tipos de painéis disponíveis
 export interface PanelOption {
   id: string;
@@ -51,3 +52,7 @@ export const INSTALLATION_COST_PER_KWP = 3500.00; // R$ custo médio de mercado
 
 // Defaults
 export const DEFAULT_HSP = 4.5; // Média Brasil conservadora
+
+// Parâmetros Financeiros e de Degradação (Novos)
+export const ENERGY_INFLATION_RATE = 0.06; // 6% ao ano (Média conservadora de aumento da tarifa de energia)
+export const PANEL_DEGRADATION_RATE = 0.007; // 0.7% ao ano (Degradação linear padrão de mercado)
